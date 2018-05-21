@@ -108,6 +108,7 @@ func (h *handler) request_target() error {
 		h.connTo, err = net.Dial("tcp", host2addr(uri.Host, ":80"))
 	}
 	if err != nil {
+		h.connTo = nil
 		return err
 	}
 	// 在此处可以认为可以发起请求了, 这里进行一个日志记录
