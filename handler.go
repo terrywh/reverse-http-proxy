@@ -143,7 +143,7 @@ func hostAllowed(host string) bool {
 	if len(suffixs) == 0 { // 未配置后缀时, 全部允许
 		return true
 	}
-	host = strings.Split(host, ":")[0]
+	host = strings.Split(host, ":")[0] // 不限制端口部分
 	for _, suffix := range suffixs {
 		if strings.HasSuffix(host, suffix) {
 			return true
@@ -252,6 +252,7 @@ func checkOrigin(origin string) bool {
 	if len(origins) == 0 { // 未配置后缀时, 全部允许
 		return true
 	}
+	origin = strings.Split(origin, ":")[0] // 不限制端口部分
 	for _, suffix := range origins {
 		if strings.HasSuffix(origin, suffix) {
 			return true
