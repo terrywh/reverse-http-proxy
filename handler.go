@@ -21,6 +21,8 @@ type handler struct {
 	rwTo    *bufio.ReadWriter
 	size     int64
 	keepConn bool
+	cors     bool
+	origin   string
 }
 
 const (
@@ -202,6 +204,7 @@ func (h *handler) response_status() error {
 	}
 	_, err = fmt.Fprint(h.rwFrom, line)
 	h.stat = STATUS_RESPONSE_HEADER
+	h.origin = ""
 	return err
 }
 func (h *handler) response_header() error {
@@ -213,6 +216,16 @@ func (h *handler) response_header() error {
 			h.stat = STATUS_RESPONSE_BODY
 		}else if h.size == -1 {
 			h.stat = STATUS_RESPONSE_CHUNK_LENGTH
+		}
+		if h.origin != "" {
+			// 允许范围内
+			if checkOrigin(h.origin) {
+				fmt.Fprintf(h.rwFrom, "Access-Control-Allow-Origin: %s\r\n", h.origin)
+				if !h.cors { // 补充额外的头信息
+					fmt.Fprint(h.rwFrom, "Access-Control-Allow-Credentials: true\r\n")
+					fmt.Fprint(h.rwFrom, "Access-Control-Allow-Methods: *\r\n")
+				}
+			}
 		}
 		fmt.Fprint(h.rwFrom, line)
 	}else if strings.HasPrefix(line, "Content-Length:") {
@@ -226,10 +239,25 @@ func (h *handler) response_header() error {
 			h.keepConn = false
 		}
 		fmt.Fprint(h.rwFrom, line)
+	}else if strings.HasPrefix(line, "Access-Control-") {
+		h.cors = true
+	}else if strings.HasPrefix(line, "Origin:") {
+		h.origin = strings.TrimSpace(line[7:])
 	}else{
 		fmt.Fprint(h.rwFrom, line)
 	}
 	return err
+}
+func checkOrigin(origin string) bool {
+	if len(origins) == 0 { // 未配置后缀时, 全部允许
+		return true
+	}
+	for _, suffix := range origins {
+		if strings.HasSuffix(origin, suffix) {
+			return true
+		}
+	}
+	return false
 }
 // 响应体对应 Content-Length 的情况
 func (h *handler) response_body() error {
