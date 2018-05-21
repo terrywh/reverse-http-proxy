@@ -103,9 +103,9 @@ func (h *handler) request_target() error {
 		return errors.New("域名被禁止 ("+strings.TrimSpace(line)+")")
 	}
 	if uri.Scheme == "https" {
-		h.connTo, err = tls.Dial("tcp", host2addr(uri.Host), nil)
+		h.connTo, err = tls.Dial("tcp", host2addr(uri.Host, ":443"), nil)
 	}else{
-		h.connTo, err = net.Dial("tcp", host2addr(uri.Host))
+		h.connTo, err = net.Dial("tcp", host2addr(uri.Host, ":80"))
 	}
 	if err != nil {
 		return err
@@ -130,9 +130,9 @@ func (h *handler) request_target() error {
 	h.stat = STATUS_REQUEST_HEADER
 	return nil
 }
-func host2addr(host string) string {
+func host2addr(host, suffix string) string {
 	if !strings.Contains(host, ":") {
-		return host + ":80"
+		return host + suffix
 	}
 	return host
 }
@@ -286,7 +286,9 @@ func(h *handler) connection() error {
 	return nil
 }
 func(h *handler) Close() {
-	h.connFrom.Close()
+	if h.connFrom != nil {
+		h.connFrom.Close()
+	}
 	if h.connTo != nil {
 		h.connTo.Close()
 	}
