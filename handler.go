@@ -101,7 +101,7 @@ func (h *handler) request_target() error {
 	if err != nil {
 		return errors.New("错误的地址 ("+strings.TrimSpace(line)+")")
 	}
-	if !hostAllowed(uri.Host) {
+	if !checkHost(uri.Host) {
 		return errors.New("域名被禁止 ("+strings.TrimSpace(line)+")")
 	}
 	if uri.Scheme == "https" {
@@ -139,7 +139,7 @@ func host2addr(host, suffix string) string {
 	}
 	return host
 }
-func hostAllowed(host string) bool {
+func checkHost(host string) bool {
 	if len(suffixs) == 0 { // 未配置后缀时, 全部允许
 		return true
 	}
