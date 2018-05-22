@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type handler struct {
@@ -90,8 +91,12 @@ func (h *handler) request_target() error {
 	}
 	
 	slices := strings.SplitN(line, " ", 3)
-	if slices[1][0:5] != "/http" {
-		return errors.New("错误的协议 ("+strings.TrimSpace(line)+")")
+	if len(slices[1]) < 5 || slices[1][0:5] != "/http" {
+		fmt.Fprintf(h.rwFrom, "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nDate: %s\r\nConnection: close\r\n\r\n",
+			time.Now().UTC().Format("Mon, 02 Jan 2006 15:04:05 GMT"))
+		h.rwFrom.Flush()
+		h.stat = STATUS_END
+		return nil
 	}
 	raw, err := url.PathUnescape(slices[1][1:])
 	if err != nil {
@@ -116,7 +121,14 @@ func (h *handler) request_target() error {
 	// 在此处可以认为可以发起请求了, 这里进行一个日志记录
 	log.Println("[PROXY] ("+slices[0]+")", uri)
 	h.rwTo = bufio.NewReadWriter(bufio.NewReader(h.connTo), bufio.NewWriter(h.connTo))
-	_, err = fmt.Fprintf(h.rwTo, "%s %s HTTP/1.1\r\n", slices[0], uri.Path + "?" + uri.RawQuery)
+	if uri.Path == "" {
+		uri.Path = "/"
+	}
+	if uri.RawQuery == "" {
+		_, err = fmt.Fprintf(h.rwTo, "%s %s HTTP/1.1\r\n", slices[0], uri.Path + "?" + uri.RawQuery)
+	}else{
+		_, err = fmt.Fprintf(h.rwTo, "%s %s HTTP/1.1\r\n", slices[0], uri.Path)
+	}
 	if err != nil {
 		return err
 	}
@@ -130,6 +142,7 @@ func (h *handler) request_target() error {
 		h.size = 0 // 用于标记请求长度
 	}
 	h.keepConn = false
+	h.origin = ""
 	h.stat = STATUS_REQUEST_HEADER
 	return nil
 }
@@ -171,11 +184,14 @@ func (h *handler) request_header() error {
 		} else if strings.Contains(line, "Close") || strings.Contains(line, "close") {
 			h.keepConn = false
 		}
-		fmt.Fprint(h.rwTo, line)
+		_, err = fmt.Fprint(h.rwTo, line)
 	} else if strings.HasPrefix(line, "Upgrade:") ||
 		strings.HasPrefix(line, "Sec-WebSocket-") ||
 	 	strings.HasPrefix(line, "HTTP2-") {
 		// 不支持升级协议, 例如 WebSocket 和 HTTP2
+	} else if strings.HasPrefix(line, "Origin:") {
+		h.origin = strings.TrimSpace(line[7:])
+		_, err = fmt.Fprint(h.rwTo, line)
 	} else {
 		_, err = fmt.Fprint(h.rwTo, line) // line 自身含有 \r\n
 	}
@@ -203,8 +219,8 @@ func (h *handler) response_status() error {
 		return err
 	}
 	_, err = fmt.Fprint(h.rwFrom, line)
+	h.cors = false
 	h.stat = STATUS_RESPONSE_HEADER
-	h.origin = ""
 	return err
 }
 func (h *handler) response_header() error {
@@ -217,14 +233,11 @@ func (h *handler) response_header() error {
 		}else if h.size == -1 {
 			h.stat = STATUS_RESPONSE_CHUNK_LENGTH
 		}
-		if h.origin != "" {
-			// 允许范围内
-			if checkOrigin(h.origin) {
-				fmt.Fprintf(h.rwFrom, "Access-Control-Allow-Origin: %s\r\n", h.origin)
-				if !h.cors { // 补充额外的头信息
-					fmt.Fprint(h.rwFrom, "Access-Control-Allow-Credentials: true\r\n")
-					fmt.Fprint(h.rwFrom, "Access-Control-Allow-Methods: *\r\n")
-				}
+		if h.origin != "" && checkOrigin(h.origin) { // 允许范围内
+			fmt.Fprintf(h.rwFrom, "Access-Control-Allow-Origin: %s\r\n", h.origin)
+			if !h.cors { // 补充额外的头信息
+				fmt.Fprint(h.rwFrom, "Access-Control-Allow-Credentials: true\r\n")
+				fmt.Fprint(h.rwFrom, "Access-Control-Allow-Methods: *\r\n")
 			}
 		}
 		fmt.Fprint(h.rwFrom, line)
@@ -239,10 +252,8 @@ func (h *handler) response_header() error {
 			h.keepConn = false
 		}
 		fmt.Fprint(h.rwFrom, line)
-	}else if strings.HasPrefix(line, "Access-Control-") {
+	}else if strings.HasPrefix(line, "Access-Control-Allow-Origin:") {
 		h.cors = true
-	}else if strings.HasPrefix(line, "Origin:") {
-		h.origin = strings.TrimSpace(line[7:])
 	}else{
 		fmt.Fprint(h.rwFrom, line)
 	}
