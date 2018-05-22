@@ -1,5 +1,5 @@
 .PHONY: all run
-GOROOT?=/usr/local/go
+GOROOT?=/data/server/go-v1.10.2-linux-x64
 
 all: bin/reverse_http_proxy
 bin/reverse_http_proxy: main.go handler.go logger.go
