@@ -91,7 +91,7 @@ func (h *handler) request_target() error {
 	}
 	
 	slices := strings.SplitN(line, " ", 3)
-	if len(slices[1]) < 5 || slices[1][0:5] != "/http" {
+	if len(slices) < 3 || len(slices[1]) < 7 || slices[1][0:5] != "/http" {
 		fmt.Fprintf(h.rwFrom, "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nDate: %s\r\nConnection: close\r\n\r\n",
 			time.Now().UTC().Format("Mon, 02 Jan 2006 15:04:05 GMT"))
 		h.rwFrom.Flush()
