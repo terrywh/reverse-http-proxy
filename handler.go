@@ -125,9 +125,9 @@ func (h *handler) request_target() error {
 		uri.Path = "/"
 	}
 	if uri.RawQuery == "" {
-		_, err = fmt.Fprintf(h.rwTo, "%s %s HTTP/1.1\r\n", slices[0], uri.Path + "?" + uri.RawQuery)
-	}else{
 		_, err = fmt.Fprintf(h.rwTo, "%s %s HTTP/1.1\r\n", slices[0], uri.Path)
+	}else{
+		_, err = fmt.Fprintf(h.rwTo, "%s %s HTTP/1.1\r\n", slices[0], uri.Path + "?" + uri.RawQuery)
 	}
 	if err != nil {
 		return err
